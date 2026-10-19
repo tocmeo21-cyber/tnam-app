@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tiến nam // AIMLOCK v4.2</title>
+<style>
+  :root{
+    --neon:      #00ffc8;
+    --neon-2:    #00b3ff;
+    --danger:    #ff2d6f;
+    --warn:      #ffc247;
+    --bg:        #03080a;
+    --panel-bg:  rgba(3,14,16,.85);
+    --text:      #b9fff0;
+    --text-dim:  #4b8f85;
+    --border:    rgba(0,255,200,.22);
+    --border-hi: rgba(0,255,200,.55);
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    background:
+      radial-gradient(circle at 50% 0%,   rgba(0,255,200,.10), transparent 55%),
+      radial-gradient(circle at 50% 100%, rgba(0,140,255,.10), transparent 55%),
+      var(--bg);
+    font-family: "Share Tech Mono", "Courier New", ui-monospace, monospace;
+    color: var(--text);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:24px 14px;
+    overflow-x:hidden;
+  }
+  #matrix{ position:fixed; inset:0; z-index:0; opacity:.55; pointer-events:none; }
+  .scanlines{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.28) 3px, rgba(0,0,0,0) 4px);
+    mix-blend-mode: multiply; opacity:.55;
+  }
+  .vignette{
+    position:fixed; inset:0; z-index:1; pointer-events:none;
+    background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.85) 100%);
+  }
+  .panel{
+    position:relative; z-index:2; width:100%; max-width: 780px;
+    background: var(--panel-bg);
+    border:1px solid var(--border-hi);
+    box-shadow:
+      0 0 22px rgba(0,255,200,.22),
+      0 0 70px rgba(0,255,200,.08),
+      inset 0 0 45px rgba(0,255,200,.05);
+    padding: 24px 24px 26px;
+    backdrop-filter: blur(3px);
+    animation: panelIn .7s ease-out both;
+    transition: box-shadow .35s, border-color .35s;
+  }
+  @keyframes panelIn{
+    from{ opacity:0; transform: translateY(18px) scale(.98); filter: blur(6px); }
+    to  { opacity:1; transform: translateY(0) scale(1);     filter: blur(0); }
+  }
+  .panel::before, .panel::after{
+    content:""; position:absolute; width:24px; height:24px;
+    border:2px solid var(--neon);
+    filter: drop-shadow(0 0 6px var(--neon));
+    pointer-events:none; transition: border-color .35s, filter .35s;
+  }
+  .panel::before{ top:-2px;    left:-2px;  border-right:0; border-bottom:0; }
+  .panel::after { bottom:-2px; right:-2px; border-left:0;  border-top:0;    }
+  .panel.armed{
+    border-color: rgba(255,45,111,.5);
+    box-shadow:
+      0 0 26px rgba(255,45,111,.28),
+      0 0 80px rgba(255,45,111,.10),
+      inset 0 0 45px rgba(255,45,111,.06);
+  }
+  .panel.armed::before, .panel.armed::after{
+    border-color: var(--danger);
+    filter: drop-shadow(0 0 6px var(--danger));
+  }
+  header{
+    border-bottom:1px dashed rgba(0,255,200,.25);
+    padding-bottom:12px; margin-bottom:14px;
+  }
+  h1{
+    font-size: clamp(17px, 3.4vw, 24px);
+    letter-spacing:2px; font-weight:400; color:#eafffb;
+    text-shadow: 0 0 6px var(--neon), 0 0 18px rgba(0,255,200,.7), 0 0 40px rgba(0,255,200,.35);
+    animation: flicker 6s infinite steps(1);
+  }
+  h1 .slash{ color: var(--neon-2); text-shadow: 0 0 12px var(--neon-2); }
+  h1 .ver{
+    font-size:.6em; color: var(--neon-2);
+    border:1px solid rgba(0,179,255,.5); padding:1px 7px;
+    margin-left:8px; vertical-align:middle;
+    box-shadow:0 0 10px rgba(0,179,255,.4) inset;
+  }
+  @keyframes flicker{
+    0%,96%,100%{ opacity:1; }
+    97%{ opacity:.55; } 98%{ opacity:1; } 99%{ opacity:.35; }
+  }
+  .status{
+    display:inline-flex; align-items:center; gap:8px;
+    margin-top:8px; font-size:11.5px; letter-spacing:2px;
+    color: var(--neon); border:1px solid rgba(0,255,200,.4);
+    background: rgba(0,255,200,.06); padding:4px 11px;
+    text-shadow:0 0 8px rgba(0,255,200,.8);
+    transition: all .35s;
+  }
+  .status .dot{
+    width:7px; height:7px; border-radius:50%;
+    background: var(--neon); box-shadow:0 0 10px var(--neon);
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink{ 50%{ opacity:.15; } }
+  .status.armed{
+    color:#ffd9e6; border-color: rgba(255,45,111,.6);
+    background: rgba(255,45,111,.10);
+    text-shadow:0 0 10px rgba(255,45,111,.9);
+  }
+  .status.armed .dot{
+    background: var(--danger); box-shadow:0 0 12px var(--danger);
+  }
+  .stats{
+    display:grid; grid-template-columns: 1fr 1fr;
+    gap:10px; margin-bottom:16px;
+  }
+  @media (max-width:520px){ .stats{ grid-template-columns: 1fr; } }
+  .stat{
+    border:1px solid var(--border);
+    background: rgba(0,255,200,.03);
+    padding:6px 9px;
+  }
+  .stat-head{
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:9.5px; letter-spacing:1.2px;
+    color: var(--text-dim); margin-bottom:5px;
+  }
+  .stat-head b{
+    color: var(--neon); font-weight:400; font-size:10.5px;
+    text-shadow:0 0 8px rgba(0,255,200,.8);
+  }
+  .bar{
+    height:4px; background: rgba(0,255,200,.10);
+    position:relative; overflow:hidden;
+  }
+  .fill{
+    height:100%; width:0%;
+    background: linear-gradient(90deg, var(--neon-2), var(--neon));
+    box-shadow: 0 0 8px rgba(0,255,200,.9);
+    transition: width .45s ease-out;
+  }
+  .fill.hot{
+    background: linear-gradient(90deg, var(--warn), var(--danger));
+    box-shadow: 0 0 8px rgba(255,45,111,.9);
+  }
+  .section-title{
+    font-size:10.5px; letter-spacing:3px;
+    color: var(--text-dim); margin-bottom:9px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::after{
+    content:""; flex:1; height:1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+  .toggles{
+    display:grid; grid-template-columns: 1fr 1fr;
+    gap:8px; margin-bottom:16px;
+  }
+  @media (max-width:560px){ .toggles{ grid-template-columns: 1fr; } }
+  .toggle{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:8px; padding:9px 11px;
+    border:1px solid var(--border);
+    background: rgba(0,255,200,.02);
+    cursor:pointer; user-select:none;
+    transition: background .2s, border-color .2s, box-shadow .2s;
+    font-size:12.5px; letter-spacing:1px;
+    position:relative; overflow:hidden;
+  }
+  .toggle:hover{
+    background: rgba(0,255,200,.07);
+    border-color: var(--border-hi);
+    box-shadow: 0 0 14px rgba(0,255,200,.18);
+  }
+  .toggle-info{ display:flex; flex-direction:column; gap:1px; min-width:0; }
+  .toggle-info .name{ color:#cfeee7; font-size:12.5px; }
+  .toggle-info small{
+    color: var(--text-dim); font-size:10px; letter-spacing:.4px;
+  }
+  .state-label{
+    font-size:9px; letter-spacing:1.5px;
+    padding:1px 5px; border:1px solid;
+    margin-left:4px; flex:0 0 auto;
+    transition: all .25s;
+  }
+  .state-label.off{
+    color:#5b8a83; border-color:#2d5a54;
+    background: rgba(0,0,0,.4);
+  }
+  .state-label.on{
+    color: var(--neon); border-color: var(--neon);
+    background: rgba(0,255,200,.12);
+    box-shadow: 0 0 8px rgba(0,255,200,.6), inset 0 0 6px rgba(0,255,200,.25);
+    text-shadow:0 0 6px rgba(0,255,200,.9);
+  }
+  .sw{
+    flex:0 0 auto; width:40px; height:18px;
+    border:1px solid rgba(0,255,200,.45);
+    background: rgba(0,0,0,.6);
+    position:relative; transition: box-shadow .25s, border-color .25s;
+  }
+  .sw i{
+    position:absolute; top:2px; left:2px;
+    width:12px; height:12px;
+    background: #17453d;
+    transition: transform .22s ease, background .22s, box-shadow .22s;
+  }
+  .toggle.on{
+    border-color: var(--border-hi);
+    background: rgba(0,255,200,.10);
+    box-shadow: 0 0 18px rgba(0,255,200,.28), inset 0 0 18px rgba(0,255,200,.08);
+  }
+  .toggle.on .toggle-info .name{ color:#eafffb; text-shadow:0 0 8px rgba(0,255,200,.6); }
+  .toggle.on .sw{ border-color: var(--neon); box-shadow:0 0 12px rgba(0,255,200,.7); }
+  .toggle.on .sw i{
+    transform: translateX(22px);
+    background: var(--neon);
+    box-shadow: 0 0 12px var(--neon);
+  }
+  .toggle.locked{
+    opacity:.45; cursor:not-allowed;
+    filter: grayscale(.4);
+  }
+  .toggle.locked:hover{
+    background: rgba(0,255,200,.02);
+    border-color: var(--border);
+    box-shadow:none;
+  }
+  .log{
+    height:100px; overflow-y:auto;
+    border:1px solid var(--border);
+    background: rgba(0,0,0,.45);
+    padding:7px 10px;
+    font-size:11px; line-height:1.6;
+    margin-bottom:18px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0,255,200,.45) transparent;
+  }
+  .log::-webkit-scrollbar{ width:6px; }
+  .log::-webkit-scrollbar-thumb{ background: rgba(0,255,200,.4); }
+  .log div{ white-space:pre-wrap; word-break:break-word; }
+  .log .t{ color:#2f6a62; }
+  .log .ok{ color: var(--neon); }
+  .log .warn{ color: var(--warn); }
+  .log .bad{ color: var(--danger); }
+  .log .info{ color: var(--neon-2); }
+  .main-btn{
+    width:100%; padding:15px 20px;
+    font-family:inherit;
+    font-size: clamp(13px, 2.4vw, 15px);
+    letter-spacing:3px;
+    color: var(--neon);
+    background: linear-gradient(180deg, rgba(0,255,200,.14), rgba(0,255,200,.04));
+    border:1px solid var(--neon);
+    cursor:pointer; position:relative;
+    text-shadow: 0 0 10px rgba(0,255,200,.9);
+    box-shadow: 0 0 18px rgba(0,255,200,.35), inset 0 0 24px rgba(0,255,200,.10);
+    transition: all .25s ease;
+    overflow:hidden;
+  }
+  .main-btn::after{
+    content:""; position:absolute; top:0; left:-120%;
+    width:60%; height:100%;
+    background: linear-gradient(100deg, transparent, rgba(0,255,200,.35), transparent);
+    animation: sweep 3.2s infinite;
+  }
+  @keyframes sweep{ 0%{ left:-120%; } 60%,100%{ left:130%; } }
+  .main-btn:hover{
+    background: linear-gradient(180deg, rgba(0,255,200,.26), rgba(0,255,200,.08));
+    box-shadow: 0 0 34px rgba(0,255,200,.65), inset 0 0 32px rgba(0,255,200,.18);
+    transform: translateY(-1px);
+  }
+  .main-btn:active{ transform: translateY(1px) scale(.995); }
+  .main-btn.active{
+    color:#ffe3ec; border-color: var(--danger);
+    background: linear-gradient(180deg, rgba(255,45,111,.30), rgba(255,45,111,.08));
+    text-shadow: 0 0 12px rgba(255,45,111,.95);
+    box-shadow: 0 0 26px rgba(255,45,111,.6), inset 0 0 30px rgba(255,45,111,.18);
+    animation: pulseActive 1.5s infinite;
+  }
+  .main-btn.active::after{
+    background: linear-gradient(100deg, transparent, rgba(255,45,111,.45), transparent);
+  }
+  @keyframes pulseActive{
+    0%,100%{ box-shadow: 0 0 22px rgba(255,45,111,.5), inset 0 0 26px rgba(255,45,111,.16); }
+    50%    { box-shadow: 0 0 46px rgba(255,45,111,.95), inset 0 0 38px rgba(255,45,111,.30); }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="matrix"></canvas>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+
+<main class="panel" id="panel">
+
+  <header>
+    <h1>Tiến nam<span class="slash">//</span> AIMLOCK <span class="ver">v4.2</span></h1>
+    <div class="status" id="status">
+      <span class="dot"></span>
+      <span id="statusText">STATUS: SAFE [UNDETECTED]</span>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-head"><span>CPU USAGE</span><b id="cpuVal">0%</b></div>
+      <div class="bar"><div class="fill" id="cpuBar"></div></div>
+    </div>
+    <div class="stat">
+      <div class="stat-head"><span>RAM MEMORY</span><b id="ramVal">0%</b></div>
+      <div class="bar"><div class="fill" id="ramBar"></div></div>
+    </div>
+  </div>
+
+  <div class="section-title">// MODULE SWITCHES</div>
+  <div class="toggles" id="toggles">
+    <div class="toggle" data-name="AIM ASSIST" data-locked="1">
+      <div class="toggle-info"><span class="name">AIM ASSIST</span><small>// hỗ trợ ngắm</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+    <div class="toggle" data-name="RECOIL CTRL" data-locked="1">
+      <div class="toggle-info"><span class="name">RECOIL CTRL</span><small>// không giật tâm</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+    <div class="toggle" data-name="ESP TRACKER">
+      <div class="toggle-info"><span class="name">ESP TRACKER</span><small>// quét hitbox</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+    <div class="toggle" data-name="SILENT LOCK">
+      <div class="toggle-info"><span class="name">SILENT LOCK</span><small>// bẻ góc siêu nhỏ</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+    <div class="toggle" data-name="GHOST MODE">
+      <div class="toggle-info"><span class="name">GHOST MODE</span><small>// chống phát hiện</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+    <div class="toggle" data-name="RADAR SCAN">
+      <div class="toggle-info"><span class="name">RADAR SCAN</span><small>// quét địch</small></div>
+      <span class="state-label off">OFF</span><span class="sw"><i></i></span>
+    </div>
+  </div>
+
+  <div class="section-title">// SYSTEM LOG</div>
+  <div class="log" id="log"></div>
+
+  <button class="main-btn" id="mainBtn">KÍCH HOẠT HỆ THỐNG AIMLOCK</button>
+
+</main>
+
+<script>
+(function matrixRain(){
+  const canvas = document.getElementById('matrix');
+  const ctx    = canvas.getContext('2d');
+  const FONT   = 15;
+  const CHARS  = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789ABCDEFｦｧｨｩｪｫｬｭｮｯ<>/\\|=+*';
+  let cols = 0, drops = [];
+  function resize(){
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols  = Math.floor(canvas.width / FONT);
+    drops = new Array(cols).fill(0).map(() => Math.random() * canvas.height / FONT);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  function draw(){
+    ctx.fillStyle = 'rgba(3, 8, 10, 0.09)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.font = FONT + 'px monospace';
+    for (let i = 0; i < cols; i++){
+      const ch = CHARS[(Math.random() * CHARS.length) | 0];
+      const x  = i * FONT;
+      const y  = drops[i] * FONT;
+      ctx.fillStyle = Math.random() > 0.975 ? 'rgba(190, 255, 245, 0.85)' : 'rgba(0, 255, 200, 0.30)';
+      ctx.fillText(ch, x, y);
+      if (y > canvas.height && Math.random() > 0.972) drops[i] = 0;
+      drops[i] += 1;
+    }
+  }
+  setInterval(draw, 55);
+})();
+
+(function sysStats(){
+  const cpuVal = document.getElementById('cpuVal');
+  const ramVal = document.getElementById('ramVal');
+  const cpuBar = document.getElementById('cpuBar');
+  const ramBar = document.getElementById('ramBar');
+  let cpu = 18 + Math.random() * 10;
+  let ram = 34 + Math.random() * 12;
+  let armed = false;
+  const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+  function render(el, bar, value){
+    const v = Math.round(value);
+    el.textContent = v + '%';
+    bar.style.width = v + '%';
+    bar.classList.toggle('hot', v >= 80);
+  }
+  function tick(){
+    const boost = armed ? 1.8 : 1;
+    cpu += (Math.random() - 0.5) * 11 * boost;
+    ram += (Math.random() - 0.5) * 6  * boost;
+    cpu = clamp(cpu, armed ? 45 : 8, armed ? 97 : 62);
+    ram = clamp(ram, 22, 94);
+    render(cpuVal, cpuBar, cpu);
+    render(ramVal, ramBar, ram);
+  }
+  tick();
+  setInterval(tick, 620);
+  window.__setArmed = state => { armed = state; };
+})();
+
+const logEl = document.getElementById('log');
+function log(msg, type = 'info'){
+  const now = new Date();
+  const t = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map(n => String(n).padStart(2, '0')).join(':');
+  const line = document.createElement('div');
+  line.innerHTML = '<span class="t">[' + t + ']</span> <span class="' + type + '">' + msg + '</span>';
+  logEl.appendChild(line);
+  logEl.scrollTop = logEl.scrollHeight;
+  while (logEl.children.length > 60) logEl.removeChild(logEl.firstChild);
+}
+log('Đang khởi tạo lõi hệ thống...', 'info');
+log('Kết nối driver kernel: OK', 'ok');
+log('Bypass signature: OK', 'ok');
+log('STATUS: SAFE [UNDETECTED]', 'ok');
+log('Nhấn "KÍCH HOẠT" để mở khóa module.', 'warn');
+
+const allToggles = document.querySelectorAll('.toggle');
+function setToggle(el, state, silent){
+  el.classList.toggle('on', state);
+  const label = el.querySelector('.state-label');
+  label.textContent = state ? 'ON' : 'OFF';
+  label.classList.toggle('on', state);
+  label.classList.toggle('off', !state);
+  if (!silent){
+    const name = el.dataset.name;
+    log(name + (state ? ' -> ENABLED' : ' -> DISABLED'), state ? 'ok' : 'bad');
+  }
+}
+function lockToggles(lock){
+  allToggles.forEach(el => {
+    if (lock){
+      el.classList.add('locked');
+      el.dataset.locked = '1';
+      setToggle(el, false, true);
+    } else {
+      el.classList.remove('locked');
+      delete el.dataset.locked;
+    }
+  });
+}
+lockToggles(true);
+allToggles.forEach(el => {
+  el.addEventListener('click', function(){
+    if (el.dataset.locked === '1'){
+      log('Module bị khóa. Hãy kích hoạt AIMLOCK trước!', 'bad');
+      return;
+    }
+    const willBeOn = !el.classList.contains('on');
+    setToggle(el, willBeOn);
+  });
+});
+
+(function mainButton(){
+  const btn        = document.getElementById('mainBtn');
+  const panel      = document.getElementById('panel');
+  const statusEl   = document.getElementById('status');
+  const statusText = document.getElementById('statusText');
+  let armed = false;
+  let spamGuard = false;
+  btn.addEventListener('click', function(){
+    if (spamGuard) return;
+    spamGuard = true;
+    setTimeout(() => spamGuard = false, 450);
+    armed = !armed;
+    if (armed){
+      btn.classList.add('active');
+      panel.classList.add('armed');
+      statusEl.classList.add('armed');
+      btn.textContent = 'HỆ THỐNG ĐÃ KÍCH HOẠT — [ ACTIVE ]';
+      statusText.textContent = 'STATUS: ACTIVE [UNDETECTED]';
+      window.__setArmed && window.__setArmed(true);
+      log('>>> KÍCH HOẠT HỆ THỐNG AIMLOCK v4.2 <<<', 'warn');
+      log('Đang inject module vào tiến trình...', 'info');
+      setTimeout(() => log('Hook DirectX / Input: OK', 'ok'), 200);
+      setTimeout(() => { lockToggles(false); log('Mở khóa toàn bộ module: OK', 'ok'); }, 400);
+      setTimeout(() => {
+        allToggles.forEach(el => {
+          if (['AIM ASSIST','RECOIL CTRL','GHOST MODE'].includes(el.dataset.name)){
+            setToggle(el, true);
+          }
+        });
+      }, 600);
+      setTimeout(() => log('AIM ASSIST: hỗ trợ ngắm -> ON', 'ok'), 800);
+      setTimeout(() => log('RECOIL CTRL: không giật tâm -> ON', 'ok'), 1000);
+      setTimeout(() => log('STATUS: ACTIVE [UNDETECTED]', 'ok'), 1300);
+    } else {
+      btn.classList.remove('active');
+      panel.classList.remove('armed');
+      statusEl.classList.remove('armed');
+      btn.textContent = 'KÍCH HOẠT HỆ THỐNG AIMLOCK';
+      statusText.textContent = 'STATUS: SAFE [UNDETECTED]';
+      window.__setArmed && window.__setArmed(false);
+      allToggles.forEach(el => setToggle(el, false, true));
+      lockToggles(true);
+      log('<<< ĐÃ TẮT HỆ THỐNG AIMLOCK >>>', 'warn');
+      log('Unhook modules: OK', 'ok');
+      log('Tất cả module đã reset về OFF', 'info');
+      log('STATUS: SAFE [UNDETECTED]', 'ok');
+    }
+  });
+})();
+</script>
+</body>
+</html>
